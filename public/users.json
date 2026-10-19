@@ -1,0 +1,43 @@
+[
+  {
+    "id": 1,
+    "username": "member_alex",
+    "name": "Alex HorrorFan",
+    "email": "alex@scaryseries.com",
+    "password": "password123",
+    "role": "Member",
+    "avatar": "🩸",
+    "favoriteGenres": [
+      "🪓 ฆาตกรต่อเนื่อง (Slasher)",
+      "👻 วิญญาณ / ไล่ผี"
+    ],
+    "createdAt": "2026-10-01T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "username": "admin_vlad",
+    "name": "Vlad The Impaler",
+    "email": "admin@scaryseries.com",
+    "password": "admin123",
+    "role": "Admin",
+    "avatar": "👑",
+    "favoriteGenres": [
+      "🧠 ระทึกขวัญจิตวิทยา",
+      "🤡 ตลกร้ายล้อเลียน"
+    ],
+    "createdAt": "2026-10-01T08:00:00Z"
+  },
+  {
+    "name": "Gaylord Robinson",
+    "username": "Horror_viewer",
+    "email": "pongpan.srp@spumail.net",
+    "password": "Chat@26042549",
+    "role": "Member",
+    "avatar": "🩸",
+    "favoriteGenres": [
+      "🤡 ตลกร้ายล้อเลียน"
+    ],
+    "id": 3,
+    "createdAt": "2026-10-14T03:43:38.425Z"
+  }
+]

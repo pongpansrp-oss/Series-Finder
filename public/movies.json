@@ -1,0 +1,418 @@
+[
+  {
+    "movie": {
+      "id": 1,
+      "name": "Scary Movie",
+      "year": 2000,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/2/29/Movie_poster_for_%22Scary_Movie%22.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "กลุ่มวัยรุ่นสุดเพี้ยนถูกตามล่าโดยฆาตกรสวมหน้ากากสุดติ๊งต๊องในภาพยนตร์ล้อเลียนหนังสยองขวัญชื่อดัง",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie",
+      "recommended": false,
+      "rating": 4.2
+    }
+  },
+  {
+    "movie": {
+      "id": 2,
+      "name": "Scary Movie 2",
+      "year": 2001,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/6/61/ScaryMovie2.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "วัยรุ่นกลุ่มเดิมถูกอาจารย์หลอกให้ไปบ้านผีสิงเพื่อทำรายงาน จนเกิดเรื่องฮาปนหลอน",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie_2",
+      "recommended": false,
+      "rating": 3.8
+    }
+  },
+  {
+    "movie": {
+      "id": 3,
+      "name": "Scary Movie 3",
+      "year": 2003,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/a/ab/Scary-movie-3-poster-3.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "ซินดี้ต้องสืบสวนวงกลมปริศนากลางทุ่งและม้วนวิดีโอต้องสาป พร้อมช่วยประธานาธิบดีรับมือเอเลี่ยน",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie_3",
+      "recommended": false,
+      "rating": 4.0
+    }
+  },
+  {
+    "movie": {
+      "id": 4,
+      "name": "Scary Movie 4",
+      "year": 2006,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/1/11/Scary_movie_four_ver4.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "ซินดี้ค้นพบความลับในบ้านผีสิงที่มีวิญญาณเด็กคอยตามหลอกหลอน และต้องหาทางหยุดยั้งสงครามล้างโลก",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie_4",
+      "recommended": false,
+      "rating": 3.5
+    }
+  },
+  {
+    "movie": {
+      "id": 5,
+      "name": "Scary Movie V",
+      "year": 2013,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/9/94/ScaryMovie5.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "คู่รักเริ่มสังเกตเห็นสิ่งผิดปกติรอบบ้านหลังรับหลานมาเลี้ยง จึงต้องติดกล้องวงจรปิดรอบบ้านเพื่อจับตาดูปีศาจสุดเพี้ยน",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie_5",
+      "recommended": false,
+      "rating": 3.2
+    }
+  },
+  {
+    "movie": {
+      "id": 6,
+      "name": "Scary Movie (2026)",
+      "year": 2026,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/7/74/Scary_Movie_%282026_film%29_poster.jpg?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+      "summary": "ภาครีบูตล่าสุดประจำปี 2026 รวมการล้อเลียนหนังสยองขวัญยุคดิจิทัล ทั้ง AI, โซเชียลมีเดีย และฆาตกรยุคใหม่",
+      "link": "https://en.wikipedia.org/wiki/Scary_Movie_(2026_film)",
+      "recommended": true,
+      "rating": 4.8
+    }
+  },
+  {
+    "movie": {
+      "id": 7,
+      "name": "The Conjuring",
+      "year": 2013,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/1/1f/Conjuring_poster.jpg",
+      "summary": "นักสืบสวนเรื่องลี้ลับ เอ็ด และ ลอร์เรน วอร์เรน ต้องเข้าไปช่วยครอบครัวหนึ่งที่ถูกคุกคามโดยวิญญาณร้ายในบ้านไร่ห่างไกล",
+      "link": "https://en.wikipedia.org/wiki/The_Conjuring",
+      "recommended": true,
+      "rating": 4.7
+    }
+  },
+  {
+    "movie": {
+      "id": 8,
+      "name": "Get Out",
+      "year": 2017,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/a/a3/Get_Out_poster.png",
+      "summary": "หนุ่มผิวดำไปเยี่ยมครอบครัวแฟนสาวผิวขาวในวันหยุดสุดสัปดาห์ แต่กลับต้องเผชิญกับความลับที่น่าสะพรึงกลัวและอันตรายถึงชีวิต",
+      "link": "https://en.wikipedia.org/wiki/Get_Out",
+      "recommended": true,
+      "rating": 4.8
+    }
+  },
+  {
+    "movie": {
+      "id": 9,
+      "name": "A Quiet Place",
+      "year": 2018,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/a/a0/A_Quiet_Place_film_poster.png",
+      "summary": "ครอบครัวหนึ่งต้องใช้ชีวิตอย่างเงียบเชียบที่สุดเพื่อซ่อนตัวจากสิ่งมีชีวิตลึกลับที่ออกล่าเหยื่อด้วยเสียง",
+      "link": "https://en.wikipedia.org/wiki/A_Quiet_Place_(film)",
+      "recommended": true,
+      "rating": 4.6
+    }
+  },
+  {
+    "movie": {
+      "id": 10,
+      "name": "Hereditary",
+      "year": 2018,
+      "category": "ลึกลับ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/d/d9/Hereditary.png",
+      "summary": "หลังจากสูญเสียคุณยาย ครอบครัวเกรแฮมก็เริ่มพบเจอกับเรื่องราวลึกลับและน่าสะพรึงกลัวเกี่ยวกับต้นตระกูลของพวกเขา",
+      "link": "https://en.wikipedia.org/wiki/Hereditary_(film)",
+      "recommended": true,
+      "rating": 4.5
+    }
+  },
+  {
+    "movie": {
+      "id": 11,
+      "name": "Scream",
+      "year": 1996,
+      "category": "ลึกลับ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/8/86/Scream_%281996_film%29_poster.jpg",
+      "summary": "ฆาตกรสวมหน้ากากโกสต์เฟซออกล่าเหยื่อในเมืองวูดส์โบโร โดยใช้กฎของหนังสยองขวัญในการปั่นหัวเหยื่ออย่างชาญฉลาด",
+      "link": "https://en.wikipedia.org/wiki/Scream_(1996_film)",
+      "recommended": false,
+      "rating": 4.3
+    }
+  },
+  {
+    "movie": {
+      "id": 12,
+      "name": "Shutter (ชัตเตอร์ กดติดวิญญาณ)",
+      "year": 2004,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/e/eb/Shutter2004Poster.jpg",
+      "summary": "ช่างภาพหนุ่มและแฟนสาวขับรถชนคนแล้วหนี หลังจากนั้นเขาก็เริ่มถ่ายภาพติดเงาปริศนาที่ตามหลอกหลอนพวกเขาไม่หยุดหย่อน",
+      "link": "https://en.wikipedia.org/wiki/Shutter_(2004_film)",
+      "recommended": true,
+      "rating": 4.9
+    }
+  },
+  {
+    "movie": {
+      "id": 13,
+      "name": "It",
+      "year": 2017,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/5/5a/It_%282017%29_poster.jpg",
+      "summary": "กลุ่มเด็กขี้แพ้ในเมืองเดอร์รี่ต้องเผชิญหน้ากับความกลัวที่สุดในชีวิต เมื่อปีศาจจำแลงร่างเป็นตัวตลกเพนนี่ไวส์ออกล่าเด็กๆ",
+      "link": "https://en.wikipedia.org/wiki/It_(2017_film)",
+      "recommended": false,
+      "rating": 4.4
+    }
+  },
+  {
+    "movie": {
+      "id": 14,
+      "name": "The Cabin in the Woods",
+      "year": 2011,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/en/c/c8/The_Cabin_in_the_Woods_Theatrical_Poster.jpg",
+      "summary": "กลุ่มวัยรุ่นไปพักผ่อนในกระท่อมกลางป่า และพบว่าพวกเขากำลังถูกควบคุมโดยองค์กรลับที่บงการเหตุการณ์สยองขวัญ",
+      "link": "https://en.wikipedia.org/wiki/The_Cabin_in_the_Woods",
+      "recommended": true,
+      "rating": 4.5
+    }
+  },
+  {
+    "movie": {
+      "id": 15,
+      "name": "Halloween",
+      "year": 1978,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/a/af/Halloween_%281978%29_theatrical_poster.jpg",
+      "summary": "ไมเคิล ไมเยอร์ส ฆาตกรสวมหน้ากากสีขาวหลบหนีออกจากโรงพยาบาลจิตเวชเพื่อกลับไปยังเมืองแฮดดอนฟิลด์ในคืนวันฮาโลวีน",
+      "link": "https://en.wikipedia.org/wiki/Halloween_(1978_film)",
+      "recommended": false,
+      "rating": 4.4
+    }
+  },
+  {
+    "movie": {
+      "id": 16,
+      "name": "The Shining",
+      "year": 1980,
+      "category": "ลึกลับ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/1/1d/The_Shining_%281980%29_U.K._release_poster_-_The_tide_of_terror_that_swept_America_IS_HERE.jpg",
+      "summary": "นักเขียนพาครอบครัวไปดูแลโรงแรมโอเวอร์ลุกที่ปิดตัวในฤดูหนาว แต่พลังงานลึกลับในโรงแรมกลับครอบงำจิตใจของเขาจนคลุ้มคลั่ง",
+      "link": "https://en.wikipedia.org/wiki/The_Shining_(film)",
+      "recommended": true,
+      "rating": 4.9
+    }
+  },
+  {
+    "movie": {
+      "id": 17,
+      "name": "A Nightmare on Elm Street",
+      "year": 1984,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/f/fa/A_Nightmare_on_Elm_Street_%281984%29_theatrical_poster.jpg",
+      "summary": "เฟรดดี้ ครูเกอร์ ปีศาจแห่งความฝันที่มีกรงเล็บเหล็กแหลมคม ออกตามล่าและสังหารวัยรุ่นในขณะที่พวกเขากำลังนอนหลับ",
+      "link": "https://en.wikipedia.org/wiki/A_Nightmare_on_Elm_Street",
+      "recommended": false,
+      "rating": 4.2
+    }
+  },
+  {
+    "movie": {
+      "id": 18,
+      "name": "The Exorcist",
+      "year": 1973,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/7/7b/The_Exorcist_ver1.jpg",
+      "summary": "เด็กหญิงวัย 12 ปีถูกวิญญาณปีศาจเข้าสิงร่าง จนแม่ของเธอต้องขอความช่วยเหลือจากบาทหลวงสองคนเพื่อทำพิธีไล่ผี",
+      "link": "https://en.wikipedia.org/wiki/The_Exorcist",
+      "recommended": true,
+      "rating": 4.7
+    }
+  },
+  {
+    "movie": {
+      "id": 19,
+      "name": "Saw",
+      "year": 2004,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/5/56/Saw_official_poster.jpg",
+      "summary": "ชายสองคนตื่นขึ้นมาในห้องน้ำทรุดโทรมพร้อมโซ่ล่ามขา และพบว่าพวกเขากลายเป็นหมากในเกมเอาชีวิตรอดสุดโหดของจิ๊กซอว์",
+      "link": "https://en.wikipedia.org/wiki/Saw_(2004_film)",
+      "recommended": true,
+      "rating": 4.5
+    }
+  },
+  {
+    "movie": {
+      "id": 20,
+      "name": "Paranormal Activity",
+      "year": 2007,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/8/87/Paranormal_Activity_poster.jpg",
+      "summary": "คู่รักหนุ่มสาวติดตั้งกล้องวิดีโอรอบบ้านเพื่อบันทึกปรากฏการณ์เหนือธรรมชาติที่เกิดขึ้นในยามค่ำคืนเมื่อพวกเขาหลับ",
+      "link": "https://en.wikipedia.org/wiki/Paranormal_Activity",
+      "recommended": false,
+      "rating": 3.9
+    }
+  },
+  {
+    "movie": {
+      "id": 21,
+      "name": "Insidious",
+      "year": 2010,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/2/2d/Insidious_poster.jpg",
+      "summary": "ครอบครัวหนึ่งพยายามช่วยลูกชายที่ตกอยู่ในอาการโคม่าลึกลับ และค้นพบว่าวิญญาณของเขาหลุดลอยเข้าไปในมิติความมืด",
+      "link": "https://en.wikipedia.org/wiki/Insidious_(film)",
+      "recommended": true,
+      "rating": 4.3
+    }
+  },
+  {
+    "movie": {
+      "id": 22,
+      "name": "Sinister",
+      "year": 2012,
+      "category": "ลึกลับ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/9/90/Sinister_poster.jpg",
+      "summary": "นักเขียนนิยายอาชญากรรมพบม้วนฟิล์ม 8 มม. ในห้องใต้หลังคาของบ้านหลังใหม่ ซึ่งบันทึกการฆาตกรรมสุดสยองของครอบครัวก่อนหน้า",
+      "link": "https://en.wikipedia.org/wiki/Sinister_(film)",
+      "recommended": false,
+      "rating": 4.2
+    }
+  },
+  {
+    "movie": {
+      "id": 23,
+      "name": "Midsommar",
+      "year": 2019,
+      "category": "ลึกลับ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/b/b3/Midsommar_%282019_film_poster%29.png",
+      "summary": "คู่รักเดินทางไปร่วมงานเทศกาลฤดูร้อนในหมู่บ้านชนบทสวีเดนที่งดงาม แต่กลับต้องเผชิญหน้ากับลัทธิประหลาดในเวลากลางวันแสกๆ",
+      "link": "https://en.wikipedia.org/wiki/Midsommar",
+      "recommended": true,
+      "rating": 4.4
+    }
+  },
+  {
+    "movie": {
+      "id": 24,
+      "name": "Us",
+      "year": 2019,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/0/00/Us_%282019%29_theatrical_poster.png",
+      "summary": "ครอบครัววิลสันเดินทางไปพักผ่อนริมชายหาด แต่กลับถูกคุกคามโดยกลุ่มคนปริศนาที่หน้าตาเหมือนพวกเขาทุกประการ",
+      "link": "https://en.wikipedia.org/wiki/Us_(2019_film)",
+      "recommended": false,
+      "rating": 4.1
+    }
+  },
+  {
+    "movie": {
+      "id": 25,
+      "name": "The Ring",
+      "year": 2002,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/3/37/The_Ring_poster.jpg",
+      "summary": "นักข่าวสาวเริ่มสืบสวนม้วนวิดีโอลึกลับที่ใครก็ตามได้ดูจะต้องเสียชีวิตภายใน 7 วันอย่างน่าสะพรึงกลัว",
+      "link": "https://en.wikipedia.org/wiki/The_Ring_(2002_film)",
+      "recommended": false,
+      "rating": 4.3
+    }
+  },
+  {
+    "movie": {
+      "id": 26,
+      "name": "Final Destination",
+      "year": 2000,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/e/e0/Final_destination_ver2.jpg",
+      "summary": "หลังจากรอดชีวิตจากอุบัติเหตุเครื่องบินตกเพราะเห็นนิมิตล่วงหน้า กลุ่มวัยรุ่นกลับถูกความตายตามทวงชีวิตคืนทีละคน",
+      "link": "https://en.wikipedia.org/wiki/Final_Destination_(film)",
+      "recommended": true,
+      "rating": 4.4
+    }
+  },
+  {
+    "movie": {
+      "id": 27,
+      "name": "The Texas Chain Saw Massacre",
+      "year": 1974,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/8/87/The_Texas_Chain_Saw_Massacre_theatrical_poster.jpg",
+      "summary": "กลุ่มเพื่อนหนุ่มสาวขับรถผ่านเท็กซัสและตกเป็นเหยื่อของครอบครัวกินคนที่มีฆาตกรสวมหน้ากากหนังมนุษย์พร้อมเลื่อยยนต์",
+      "link": "https://en.wikipedia.org/wiki/The_Texas_Chain_Saw_Massacre",
+      "recommended": false,
+      "rating": 4.1
+    }
+  },
+  {
+    "movie": {
+      "id": 28,
+      "name": "Evil Dead Rise",
+      "year": 2023,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/2/29/Evil_Dead_Rise_theatrical_poster.jpg",
+      "summary": "การกลับมาของคัมภีร์แห่งความตายในอพาร์ตเมนต์กลางเมืองลอสแอนเจลิส ทำให้สองพี่น้องต้องต่อสู้กับปีศาจกระหายเลือด",
+      "link": "https://en.wikipedia.org/wiki/Evil_Dead_Rise",
+      "recommended": false,
+      "rating": 4.2
+    }
+  },
+  {
+    "movie": {
+      "id": 29,
+      "name": "The Nun",
+      "year": 2018,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/3/34/TheNunPoster.jpg",
+      "summary": "เรื่องราวต้นกำเนิดของแม่ชีปีศาจ 'วาแล็ก' ในอารามโบราณประเทศโรมาเนีย ที่ซึ่งบาทหลวงและแม่ชีฝึกหัดต้องเสี่ยงชีวิตสืบหาความจริง",
+      "link": "https://en.wikipedia.org/wiki/The_Nun_(2018_film)",
+      "recommended": false,
+      "rating": 3.8
+    }
+  },
+  {
+    "movie": {
+      "id": 30,
+      "name": "Talk to Me",
+      "year": 2022,
+      "category": "สยองขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/8/80/Talk_to_Me_film_poster.jpg",
+      "summary": "กลุ่มวัยรุ่นค้นพบวิธีติดต่อกับวิญญาณคนตายโดยใช้มือดองเซรามิก แต่เมื่อหนึ่งในนั้นทำลายกฎ ประตูสู่นรกก็เปิดออก",
+      "link": "https://en.wikipedia.org/wiki/Talk_to_Me_(2022_film)",
+      "recommended": true,
+      "rating": 4.6
+    }
+  },
+  {
+    "movie": {
+      "id": 31,
+      "name": "Alien",
+      "year": 1979,
+      "category": "ระทึกขวัญ",
+      "image": "https://upload.wikimedia.org/wikipedia/en/c/c3/Alien_movie_poster.jpg",
+      "summary": "ลูกเรือยานอวกาศพาณิชย์นอสโตรโมต้องเผชิญหน้ากับสิ่งมีชีวิตต่างดาวสุดอันตรายที่แอบขึ้นมาบนยานและเริ่มไล่ล่าพวกเขาทีละคน",
+      "link": "https://en.wikipedia.org/wiki/Alien_(film)",
+      "recommended": true,
+      "rating": 4.9
+    }
+  },
+  {
+    "movie": {
+      "id": 32,
+      "name": "Pee Mak (พี่มาก..พระโขนง)",
+      "year": 2013,
+      "category": "ตลกร้าย",
+      "image": "https://upload.wikimedia.org/wikipedia/th/a/a2/Pee_Mak_poster.jpg",
+      "summary": "พี่มากกลับมาจากสงครามพร้อมเพื่อนรักสี่คนเพื่อพบกับแม่นาคเมียรัก แต่ชาวบ้านต่างลือกันว่าแม่นาคได้ตายทั้งกลมกลายเป็นผีไปแล้ว",
+      "link": "https://en.wikipedia.org/wiki/Pee_Mak",
+      "recommended": true,
+      "rating": 4.8
+    }
+  }
+]
