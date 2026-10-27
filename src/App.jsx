@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
-import { supabase, initSupabaseClient, clearSupabaseConfig } from './supabaseClient'
+import { api, API_BASE_URL, tokenStore, fieldErrors } from './apiClient'
 
 function App() {
   // ---- User Roles & Auth State ----
@@ -15,14 +15,16 @@ function App() {
   // List of all registered users loaded from /users.json
   const [registeredUsers, setRegisteredUsers] = useState([])
 
-  // Navigation State: 'home' | 'watchlist' | 'admin' | 'users'
+  // Navigation State: 'home' | 'watchlist' | 'admin' | 'users' | 'api'
   const [currentTab, setCurrentTab] = useState('home')
 
   // Modals
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState('login') // 'login' | 'register'
+  const [authProvider, setAuthProvider] = useState('api') // 'api' | 'local'
   const [authError, setAuthError] = useState('') // For Error Handling requirement
-  const [showSupabaseModal, setShowSupabaseModal] = useState(false)
+  const [fieldErrorsObj, setFieldErrorsObj] = useState({}) // Field validation errors { email, password, name }
+  const [submittingAuth, setSubmittingAuth] = useState(false)
   const [guestWarningModal, setGuestWarningModal] = useState({
     show: false,
     title: '',
@@ -30,12 +32,26 @@ function App() {
   })
   const [notification, setNotification] = useState(null)
 
-  // Supabase Configuration State
-  const [sbConfig, setSbConfig] = useState({
-    url: localStorage.getItem('scary_supabase_url') || import.meta.env.VITE_SUPABASE_URL || '',
-    key: localStorage.getItem('scary_supabase_key') || import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-  })
-  const [activeSupabase, setActiveSupabase] = useState(supabase)
+  // Cloud Course API State (dev2life Workers)
+  const [apiHealth, setApiHealth] = useState(null)
+  const [apiLatency, setApiLatency] = useState(null)
+  const [apiStatus, setApiStatus] = useState('checking') // 'online' | 'offline' | 'checking'
+  const [demoTestResult, setDemoTestResult] = useState(null)
+  const [demoTestLoading, setDemoTestLoading] = useState(false)
+  const [cloudUsers, setCloudUsers] = useState([])
+  const [loadingCloudUsers, setLoadingCloudUsers] = useState(false)
+
+  // Cloud Admin Pagination & Filter States
+  const [adminPage, setAdminPage] = useState(1)
+  const [adminLimit, setAdminLimit] = useState(10)
+  const [adminMeta, setAdminMeta] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 })
+  const [adminSearch, setAdminSearch] = useState('')
+  const [adminRoleFilter, setAdminRoleFilter] = useState('')
+  const [adminStatusFilter, setAdminStatusFilter] = useState('')
+  const [adminSort, setAdminSort] = useState('createdAt')
+  const [adminOrder, setAdminOrder] = useState('desc')
+  const [adminStats, setAdminStats] = useState(null)
+  const [testingExpiredToken, setTestingExpiredToken] = useState(false)
 
   // Register Form State (Sign Up requirement)
   const [regForm, setRegForm] = useState({
@@ -87,29 +103,163 @@ function App() {
   // ========================================================
   // 5. จัดการ Session (Session Persistence) & Initial Load
   // ========================================================
+  const fetchApiHealth = async () => {
+    setApiStatus('checking')
+    try {
+      const res = await api.checkHealth()
+      setApiHealth(res.data)
+      setApiLatency(res.latency)
+      setApiStatus('online')
+    } catch (err) {
+      console.warn('API Health Check Error:', err)
+      setApiStatus('offline')
+    }
+  }
+
+  const handleTestDemoRoute = async (level) => {
+    setDemoTestLoading(true)
+    setDemoTestResult(null)
+    try {
+      const result = await api.testDemoRoute(level)
+      setDemoTestResult({ level, success: true, data: result })
+      showToast(`✅ ผ่านสิทธิ์ (${level}): ${result.data?.message || 'Authorized'}`)
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message || 'ไม่มีสิทธิ์'
+      setDemoTestResult({ level, success: false, error: msg })
+      showToast(`❌ ไม่อนุญาต (${level}): ${msg}`)
+    } finally {
+      setDemoTestLoading(false)
+    }
+  }
+
+  const fetchAdminStats = async () => {
+    try {
+      const stats = await api.getAdminStats()
+      setAdminStats(stats)
+    } catch (err) {
+      console.warn('Could not fetch admin stats:', err)
+    }
+  }
+
+  const fetchCloudUsers = async (pageToLoad = adminPage) => {
+    setLoadingCloudUsers(true)
+    try {
+      const params = {
+        page: pageToLoad,
+        limit: adminLimit,
+        sort: adminSort,
+        order: adminOrder
+      }
+      if (adminSearch.trim()) params.search = adminSearch.trim()
+      if (adminRoleFilter) params.role = adminRoleFilter
+      if (adminStatusFilter) params.status = adminStatusFilter
+
+      const res = await api.getAdminUsers(params)
+      setCloudUsers(res.data || [])
+      if (res.meta) {
+        setAdminMeta(res.meta)
+        setAdminPage(res.meta.page)
+      }
+      fetchAdminStats()
+      showToast(`📥 ดึงรายชื่อผู้ใช้จาก Cloud API เรียบร้อย (หน้า ${pageToLoad})`)
+    } catch (err) {
+      showToast(`❌ ดึงรายชื่อไม่สำเร็จ: ${err.response?.data?.error?.message || err.message}`)
+    } finally {
+      setLoadingCloudUsers(false)
+    }
+  }
+
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      const updated = await api.updateRole(userId, newRole)
+      setCloudUsers(prev => prev.map(u => u.id === userId ? { ...u, role: updated.role } : u))
+      fetchAdminStats()
+      showToast(`✅ เปลี่ยน Role ของ ${updated.name} เป็น ${updated.role} สำเร็จ`)
+    } catch (err) {
+      showToast(`❌ เปลี่ยน Role ไม่สำเร็จ: ${err.response?.data?.error?.message || err.message}`)
+    }
+  }
+
+  const handleUpdateStatus = async (userId, newStatus) => {
+    try {
+      const updated = await api.updateStatus(userId, newStatus)
+      setCloudUsers(prev => prev.map(u => u.id === userId ? { ...u, status: updated.status } : u))
+      fetchAdminStats()
+      showToast(`✅ อัปเดตสถานะของ ${updated.name} เป็น ${updated.status} สำเร็จ`)
+    } catch (err) {
+      showToast(`❌ อัปเดตสถานะไม่สำเร็จ: ${err.response?.data?.error?.message || err.message}`)
+    }
+  }
+
+  const handleDeleteCloudUser = async (userId, name) => {
+    if (!window.confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบบัญชี "${name}" ออกจากระบบ?`)) return
+    try {
+      await api.deleteUser(userId)
+      setCloudUsers(prev => prev.filter(u => u.id !== userId))
+      fetchAdminStats()
+      showToast(`🗑️ ลบบัญชี "${name}" เรียบร้อย`)
+    } catch (err) {
+      showToast(`❌ ลบไม่สำเร็จ: ${err.response?.data?.error?.message || err.message}`)
+    }
+  }
+
+  const handleTestExpiredToken = async () => {
+    setTestingExpiredToken(true)
+    try {
+      const expiredToken = await api.getExpiredToken()
+      tokenStore.save({ accessToken: expiredToken })
+      showToast('⏰ จำลอง Token หมดอายุแล้ว... กำลังทดสอบเรียก /auth/me')
+
+      // Interceptor จะดักจับ 401 TOKEN_EXPIRED -> เรียก /auth/refresh -> แล้วยิงซ้ำอัตโนมัติ
+      const me = await api.getMe()
+      showToast(`🎉 Auto-Refresh สำเร็จ! ตรวจพบ TOKEN_EXPIRED และขอ Token ใหม่สำเร็จ ยินดีต้อนรับ ${me.name}`)
+    } catch (err) {
+      showToast(`❌ ทดสอบ Auto-Refresh ล้มเหลว: ${err.response?.data?.error?.message || err.message}`)
+    } finally {
+      setTestingExpiredToken(false)
+    }
+  }
+
   useEffect(() => {
     loadMovies()
     loadUsers()
+    fetchApiHealth()
 
-    // 1) จัดการ Session ผ่าน Supabase Auth จริง (ถ้ามีการเชื่อมต่อ)
-    if (activeSupabase) {
-      activeSupabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          syncSupabaseUser(session.user)
+    // 1) จัดการ Session สำหรับ Cloud Course API ตามมาตรฐาน
+    const token = tokenStore.access
+    if (token) {
+      api.getMe().then(apiUser => {
+        const userData = {
+          id: apiUser.id,
+          role: apiUser.role === 'ADMIN' ? 'Admin' : (apiUser.role === 'EDITOR' ? 'Editor' : 'Member'),
+          apiRole: apiUser.role,
+          name: apiUser.name,
+          username: apiUser.email.split('@')[0],
+          email: apiUser.email,
+          avatar: apiUser.avatarUrl || (apiUser.role === 'ADMIN' ? '👑' : apiUser.role === 'EDITOR' ? '✍️' : '🩸'),
+          authProvider: 'api',
+          status: apiUser.status,
+          isProtected: apiUser.isProtected
         }
-      }).catch(err => console.warn('Supabase getSession error:', err))
-
-      const { data: { subscription } } = activeSupabase.auth.onAuthStateChange((event, session) => {
-        if (session?.user) {
-          syncSupabaseUser(session.user)
-        } else if (event === 'SIGNED_OUT') {
-          handleLogout(false)
+        setCurrentUser(userData)
+        localStorage.setItem('scary_current_user', JSON.stringify(userData))
+      }).catch(err => {
+        const code = err.response?.data?.error?.code
+        // ล้าง token เฉพาะเมื่อ Token ไม่ถูกต้อง หรือถูกแบน (ห้าม logout บน network/5xx error)
+        if (['TOKEN_INVALID', 'TOKEN_MISSING', 'REFRESH_TOKEN_INVALID', 'ACCOUNT_BANNED'].includes(code)) {
+          tokenStore.clear()
+          localStorage.removeItem('scary_current_user')
+          setCurrentUser({
+            role: 'Guest',
+            name: 'Guest User',
+            username: '',
+            email: '',
+            avatar: '👤'
+          })
         }
       })
-
-      return () => subscription?.unsubscribe()
     } else {
-      // 2) จัดการ Session Persistence ผ่าน localStorage (เมื่อไม่มี Supabase)
+      // 2) จัดการ Session Persistence ผ่าน localStorage (เมื่อไม่มี Cloud API Token)
       const savedSession = localStorage.getItem('scary_current_user')
       if (savedSession) {
         try {
@@ -119,7 +269,28 @@ function App() {
         }
       }
     }
-  }, [activeSupabase])
+
+    const onAuthLogout = (e) => {
+      const detail = e.detail || {}
+      tokenStore.clear()
+      localStorage.removeItem('scary_current_user')
+      setCurrentUser({
+        role: 'Guest',
+        name: 'Guest User',
+        username: '',
+        email: '',
+        avatar: '👤'
+      })
+      if (detail.code === 'ACCOUNT_BANNED') {
+        showToast(`⛔ บัญชีถูกระงับ (ACCOUNT_BANNED): ${detail.message || ''}`)
+      } else {
+        showToast(`🔒 ออกจากระบบเรียบร้อย (เซสชันหมดอายุ)`)
+      }
+    }
+
+    window.addEventListener('auth:logout', onAuthLogout)
+    return () => window.removeEventListener('auth:logout', onAuthLogout)
+  }, [])
 
   // Helper เพื่อดึง Storage Key แยกเฉพาะบัญชีผู้ใช้แต่ละคน
   const getUserStorageKey = (prefix, user) => {
@@ -160,21 +331,6 @@ function App() {
       setUserRatings({})
     }
   }, [currentUser.id, currentUser.username, currentUser.email, currentUser.role])
-
-  const syncSupabaseUser = (sbUser) => {
-    const meta = sbUser.user_metadata || {}
-    const userData = {
-      id: sbUser.id,
-      role: meta.role || (sbUser.email?.includes('admin') ? 'Admin' : 'Member'),
-      name: meta.name || sbUser.email.split('@')[0],
-      username: meta.username || sbUser.email.split('@')[0],
-      email: sbUser.email,
-      avatar: meta.avatar || (meta.role === 'Admin' ? '👑' : '🩸'),
-      favoriteGenres: meta.favoriteGenres || []
-    }
-    setCurrentUser(userData)
-    localStorage.setItem('scary_current_user', JSON.stringify(userData))
-  }
 
   // Load Movies from /movies.json
   const loadMovies = async () => {
@@ -223,13 +379,11 @@ function App() {
   // ========================================================
   // 6. ออกจากระบบ (Logout): ออกจากระบบได้จริงและกลับสู่สถานะ Guest
   // ========================================================
-  const handleLogout = async (triggerSupabase = true) => {
-    if (activeSupabase && triggerSupabase) {
-      try {
-        await activeSupabase.auth.signOut()
-      } catch (err) {
-        console.warn('Supabase signOut error:', err)
-      }
+  const handleLogout = async () => {
+    if (currentUser.authProvider === 'api') {
+      await api.logout()
+    } else {
+      tokenStore.clear()
     }
 
     const guestUser = {
@@ -241,29 +395,28 @@ function App() {
     }
     setCurrentUser(guestUser)
     localStorage.removeItem('scary_current_user')
-    if (currentTab === 'admin' || currentTab === 'watchlist' || currentTab === 'users') {
+    tokenStore.clear()
+    if (currentTab === 'admin' || currentTab === 'watchlist' || currentTab === 'users' || currentTab === 'api') {
       setCurrentTab('home')
     }
     showToast('👋 ออกจากระบบเรียบร้อยแล้ว (กลับสู่สถานะ Guest)')
   }
 
   // ========================================================
-  // 1. สมัครสมาชิก (Sign Up): เชื่อม Supabase Auth จริง
+  // 1. สมัครสมาชิก (Sign Up): รองรับ Cloud API และ Local users.json
   // ========================================================
   const handleRegisterSubmit = async (e) => {
     e.preventDefault()
     setAuthError('')
+    setFieldErrorsObj({})
 
-    if (!regForm.name || !regForm.username || !regForm.email || !regForm.password) {
+    if (!regForm.name || !regForm.email || !regForm.password) {
       setAuthError('กรุณากรอกข้อมูลสำคัญให้ครบถ้วน')
       return
     }
     if (regForm.password !== regForm.confirmPassword) {
       setAuthError('รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน')
-      return
-    }
-    if (regForm.password.length < 6) {
-      setAuthError('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร')
+      setFieldErrorsObj({ confirmPassword: 'รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน' })
       return
     }
     if (!regForm.acceptTerms) {
@@ -271,50 +424,58 @@ function App() {
       return
     }
 
-    // กรณีมี Supabase Client ทำการสมัครผ่าน Supabase Auth จริง!
-    if (activeSupabase) {
+    setSubmittingAuth(true)
+
+    // A) กรณีสมัครผ่าน Cloud Course API
+    if (authProvider === 'api') {
       try {
-        const { data, error: sbError } = await activeSupabase.auth.signUp({
+        const { user: apiUser } = await api.register({
+          name: regForm.name.trim(),
           email: regForm.email.trim(),
-          password: regForm.password,
-          options: {
-            data: {
-              name: regForm.name.trim(),
-              username: regForm.username.trim(),
-              role: 'Member',
-              avatar: '🩸',
-              favoriteGenres: regForm.genres
-            }
-          }
+          password: regForm.password
         })
-
-        if (sbError) {
-          // 4. จัดการข้อผิดพลาด (Error Handling)
-          setAuthError(`Supabase Auth Error: ${sbError.message}`)
-          showToast(`❌ สมัครสมาชิกไม่สำเร็จ: ${sbError.message}`)
-          return
+        const userData = {
+          id: apiUser.id,
+          role: apiUser.role === 'ADMIN' ? 'Admin' : (apiUser.role === 'EDITOR' ? 'Editor' : 'Member'),
+          apiRole: apiUser.role,
+          name: apiUser.name,
+          username: apiUser.email.split('@')[0],
+          email: apiUser.email,
+          avatar: apiUser.avatarUrl || '🩸',
+          authProvider: 'api',
+          status: apiUser.status,
+          isProtected: apiUser.isProtected
         }
-
-        if (data?.user) {
-          syncSupabaseUser(data.user)
-          setShowAuthModal(false)
-          setGuestWarningModal({ show: false, title: '', message: '' })
-          showToast(`🎉 เชื่อมต่อ Supabase สำเร็จ! สมัครสมาชิกและเข้าสู่ระบบเรียบร้อย`)
-        } else {
-          showToast(`📩 ตรวจสอบอีเมลเพื่อยืนยันตัวตน (หาก Supabase เปิดฟังก์ชัน Confirm Email)`)
-          setShowAuthModal(false)
-        }
+        setCurrentUser(userData)
+        localStorage.setItem('scary_current_user', JSON.stringify(userData))
+        setShowAuthModal(false)
+        setGuestWarningModal({ show: false, title: '', message: '' })
+        setRegForm({
+          name: '',
+          username: '',
+          email: '',
+          password: '',
+          confirmPassword: '',
+          genres: [],
+          acceptTerms: false
+        })
+        showToast(`🎉 สมัครสมาชิกผ่าน Cloud Course API สำเร็จ! ยินดีต้อนรับคุณ ${apiUser.name}`)
         return
       } catch (err) {
-        setAuthError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ Supabase')
+        const errs = fieldErrors(err)
+        setFieldErrorsObj(errs)
+        const errorMsg = err.response?.data?.error?.message || err.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิกผ่าน Cloud API'
+        setAuthError(errorMsg)
         return
+      } finally {
+        setSubmittingAuth(false)
       }
     }
 
-    // กรณีไม่มี Supabase ให้บันทึกลง public/users.json
+    // B) กรณี Local users.json
     const payload = {
       name: regForm.name.trim(),
-      username: regForm.username.trim(),
+      username: regForm.username?.trim() || regForm.email.split('@')[0],
       email: regForm.email.trim(),
       password: regForm.password,
       role: 'Member',
@@ -332,7 +493,6 @@ function App() {
       const data = await res.json()
 
       if (!res.ok) {
-        // 4. จัดการข้อผิดพลาด (Error Handling)
         setAuthError(data.message || 'ไม่สามารถสมัครสมาชิกได้')
         return
       }
@@ -358,15 +518,18 @@ function App() {
       showToast(`🎉 สมัครสมาชิกสำเร็จ! บันทึกลง users.json ยินดีต้อนรับคุณ ${createdUser.name}`)
     } catch (err) {
       setAuthError('เกิดข้อผิดพลาดในการเชื่อมต่อ API สมัครสมาชิก')
+    } finally {
+      setSubmittingAuth(false)
     }
   }
 
   // ========================================================
-  // 2. เข้าสู่ระบบ (Login): ตรวจสอบ Email และ Password ผ่าน Supabase Auth จริง
+  // 2. เข้าสู่ระบบ (Login): รองรับ Cloud API และ Local Mock
   // ========================================================
   const handleLoginSubmit = async (e) => {
     e.preventDefault()
     setAuthError('')
+    setFieldErrorsObj({})
 
     const input = loginForm.emailOrUser.trim()
     const pass = loginForm.password
@@ -376,36 +539,50 @@ function App() {
       return
     }
 
-    // กรณีเชื่อมต่อ Supabase Auth จริง!
-    if (activeSupabase) {
+    setSubmittingAuth(true)
+
+    // A) กรณีเข้าสู่ระบบผ่าน Cloud Course API (dev2life Workers)
+    if (authProvider === 'api') {
       try {
-        const { data, error: sbError } = await activeSupabase.auth.signInWithPassword({
-          email: input,
-          password: pass
-        })
-
-        if (sbError) {
-          // 4. จัดการข้อผิดพลาด (Error Handling)
-          setAuthError(`Supabase Auth Error: ${sbError.message}`)
-          showToast(`❌ เข้าสู่ระบบไม่สำเร็จ: ${sbError.message}`)
-          return
+        const { user: apiUser } = await api.login(input, pass)
+        const userData = {
+          id: apiUser.id,
+          role: apiUser.role === 'ADMIN' ? 'Admin' : (apiUser.role === 'EDITOR' ? 'Editor' : 'Member'),
+          apiRole: apiUser.role,
+          name: apiUser.name,
+          username: apiUser.email.split('@')[0],
+          email: apiUser.email,
+          avatar: apiUser.avatarUrl || (apiUser.role === 'ADMIN' ? '👑' : apiUser.role === 'EDITOR' ? '✍️' : '🩸'),
+          authProvider: 'api',
+          status: apiUser.status,
+          isProtected: apiUser.isProtected
         }
-
-        if (data?.user) {
-          syncSupabaseUser(data.user)
-          setShowAuthModal(false)
-          setGuestWarningModal({ show: false, title: '', message: '' })
-          showToast(`🩸 เข้าสู่ระบบผ่าน Supabase สำเร็จ! สวัสดีคุณ ${currentUser.name}`)
+        setCurrentUser(userData)
+        if (loginForm.rememberMe) {
+          localStorage.setItem('scary_current_user', JSON.stringify(userData))
         }
+        setShowAuthModal(false)
+        setGuestWarningModal({ show: false, title: '', message: '' })
+        showToast(`☁️ เข้าสู่ระบบ Cloud Course API สำเร็จ! สวัสดีคุณ ${apiUser.name} (${apiUser.role})`)
         return
       } catch (err) {
-        setAuthError(err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบผ่าน Supabase')
+        const errs = fieldErrors(err)
+        setFieldErrorsObj(errs)
+        const code = err.response?.data?.error?.code
+        const errorMsg = err.response?.data?.error?.message || err.message || 'เข้าสู่ระบบผ่าน Cloud API ไม่สำเร็จ'
+        if (code === 'ACCOUNT_BANNED') {
+          setAuthError(`⛔ บัญชีนี้ถูกระงับการใช้งาน (ACCOUNT_BANNED): ${errorMsg}`)
+        } else {
+          setAuthError(errorMsg)
+        }
         return
+      } finally {
+        setSubmittingAuth(false)
       }
     }
 
-    // กรณีตรวจสอบผ่าน users.json (Local Mock)
-    const matched = registeredUsers.find(u => 
+    // B) กรณีตรวจสอบผ่าน users.json (Local Mock)
+    const matched = registeredUsers.find(u =>
       (u.username.toLowerCase() === input.toLowerCase() || u.email.toLowerCase() === input.toLowerCase()) &&
       u.password === pass
     )
@@ -419,29 +596,7 @@ function App() {
       setGuestWarningModal({ show: false, title: '', message: '' })
       showToast(`🩸 เข้าสู่ระบบสำเร็จ! สวัสดีคุณ ${matched.name} (${matched.role})`)
     } else {
-      // 4. จัดการข้อผิดพลาด (Error Handling)
       setAuthError('อีเมล/ชื่อผู้ใช้ หรือรหัสผ่านไม่ถูกต้อง (ลองตรวจสอบข้อมูลใน users.json)')
-    }
-  }
-
-  // Save Supabase Configuration
-  const handleSaveSupabaseConfig = (e) => {
-    e.preventDefault()
-    if (!sbConfig.url || !sbConfig.key) {
-      clearSupabaseConfig()
-      setActiveSupabase(null)
-      showToast('ยกเลิกการเชื่อมต่อ Supabase (ใช้โหมด Local users.json)')
-      setShowSupabaseModal(false)
-      return
-    }
-
-    try {
-      const client = initSupabaseClient(sbConfig.url.trim(), sbConfig.key.trim())
-      setActiveSupabase(client)
-      showToast('⚡ เชื่อมต่อ Supabase Project สำเร็จเรียบร้อยแล้ว!')
-      setShowSupabaseModal(false)
-    } catch (err) {
-      showToast('❌ ไม่สามารถเชื่อมต่อ Supabase URL นี้ได้')
     }
   }
 
@@ -664,16 +819,16 @@ function App() {
     const currentRating = userRatings[item.movie.id] || item.movie.rating || 0
 
     return (
-      <div 
+      <div
         className="movie-card clickable-card"
         onClick={(e) => handleCardClick(e, item)}
       >
         <div className="card-image-wrapper">
           {item.movie.image ? (
-            <img 
-              src={item.movie.image} 
-              alt={item.movie.name} 
-              className="movie-image" 
+            <img
+              src={item.movie.image}
+              alt={item.movie.name}
+              className="movie-image"
               onError={(e) => {
                 e.target.onerror = null
                 e.target.src = 'https://images.unsplash.com/photo-1505635552518-3448ff116af3?w=300&h=450&fit=crop'
@@ -692,7 +847,7 @@ function App() {
           )}
 
           {/* Favorite Heart Button */}
-          <button 
+          <button
             type="button"
             className={`fav-btn ${isFav ? 'active' : ''}`}
             title={isFav ? 'ลบออกจาก Watchlist' : 'เพิ่มใน Watchlist'}
@@ -712,8 +867,8 @@ function App() {
           <div className="rating-container" onClick={(e) => e.stopPropagation()}>
             <div className="stars">
               {[1, 2, 3, 4, 5].map((star) => (
-                <span 
-                  key={star} 
+                <span
+                  key={star}
                   className={`star-icon ${Math.round(currentRating) >= star ? 'filled' : ''}`}
                   onClick={(e) => handleRateMovie(e, item.movie.id, star)}
                   title={`ให้ ${star} ดาว`}
@@ -729,13 +884,13 @@ function App() {
 
           <p className="movie-summary">
             {item.movie.summary ? (
-              item.movie.summary.length > 95 
-                ? item.movie.summary.substring(0, 95) + '...' 
+              item.movie.summary.length > 95
+                ? item.movie.summary.substring(0, 95) + '...'
                 : item.movie.summary
             ) : "ไม่มีข้อมูลเรื่องย่อ"}
           </p>
 
-          <a 
+          <a
             href={currentUser.role === 'Guest' ? '#' : item.movie.link}
             target={currentUser.role === 'Guest' ? '_self' : '_blank'}
             rel="noopener noreferrer"
@@ -772,8 +927,8 @@ function App() {
 
         {/* Navigation Tabs */}
         <div className="nav-tabs">
-          <button 
-            type="button" 
+          <button
+            type="button"
             className={`nav-tab-btn ${currentTab === 'home' ? 'active' : ''}`}
             onClick={() => setCurrentTab('home')}
           >
@@ -782,8 +937,8 @@ function App() {
 
           {/* Watchlist Tab (Only for Member and Admin) */}
           {(currentUser.role === 'Member' || currentUser.role === 'Admin') && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`nav-tab-btn ${currentTab === 'watchlist' ? 'active' : ''}`}
               onClick={() => setCurrentTab('watchlist')}
             >
@@ -794,8 +949,8 @@ function App() {
           {/* Admin Tabs & Controls (Only for Admin) */}
           {currentUser.role === 'Admin' && (
             <>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className={`nav-tab-btn admin-tab ${currentTab === 'admin' ? 'active' : ''}`}
                 onClick={() => setCurrentTab('admin')}
               >
@@ -803,25 +958,25 @@ function App() {
               </button>
 
               {/* Users List Tab - แสดงเฉพาะในหน้า Admin */}
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className={`nav-tab-btn ${currentTab === 'users' ? 'active' : ''}`}
                 onClick={() => { loadUsers(); setCurrentTab('users'); }}
               >
                 👥 บัญชีในระบบ ({registeredUsers.length})
               </button>
-
-              {/* Supabase Connection Status - แสดงเฉพาะในหน้า Admin */}
-              <button 
-                type="button" 
-                className={`nav-tab-btn supabase-btn ${activeSupabase ? 'connected' : ''}`}
-                onClick={() => setShowSupabaseModal(true)}
-                title="คลิกเพื่อตั้งค่าหรือดูสถานะ Supabase Auth (สำหรับ Admin)"
-              >
-                ⚡ {activeSupabase ? 'Supabase (เชื่อมต่อแล้ว)' : 'เชื่อมต่อ Supabase'}
-              </button>
             </>
           )}
+
+          {/* Cloud API & System Health Tab */}
+          <button
+            type="button"
+            className={`nav-tab-btn api-tab ${currentTab === 'api' ? 'active' : ''}`}
+            onClick={() => setCurrentTab('api')}
+            title="คลิกเพื่อตรวจสอบ Health Check และทดสอบระบบ Cloud API"
+          >
+            📡 Cloud API {apiStatus === 'online' ? '🟢' : apiStatus === 'offline' ? '🔴' : '🟡'}
+          </button>
         </div>
 
         {/* User Status & Role Switcher */}
@@ -829,7 +984,7 @@ function App() {
           {/* Quick Role Switcher Dropdown */}
           <div className="role-dropdown-wrap">
             <span className="role-label">สลับโหมด:</span>
-            <select 
+            <select
               className={`role-select role-${currentUser.role.toLowerCase()}`}
               value={currentUser.role}
               onChange={(e) => switchRole(e.target.value)}
@@ -843,15 +998,15 @@ function App() {
           {/* 3. แสดงข้อมูลสมาชิก (Member Area) & Auth Buttons */}
           {currentUser.role === 'Guest' ? (
             <div className="auth-btns">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-login-outline"
                 onClick={() => { setAuthError(''); setAuthMode('login'); setShowAuthModal(true); }}
               >
                 เข้าสู่ระบบ
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-register-solid"
                 onClick={() => { setAuthError(''); setAuthMode('register'); setShowAuthModal(true); }}
               >
@@ -869,8 +1024,8 @@ function App() {
                   {currentUser.role}
                 </span>
               </div>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-logout"
                 title="ออกจากระบบ"
                 onClick={() => handleLogout(true)}
@@ -894,9 +1049,9 @@ function App() {
             </p>
             {currentUser.role === 'Guest' && (
               <div className="guest-banner-notice">
-                ⚠️ คุณกำลังใช้งานในโหมด <strong>Guest</strong> (รับชมได้จำกัด 10 เรื่อง และไม่สามารถเลือกหมวดหมู่ได้) 
-                <button 
-                  type="button" 
+                ⚠️ คุณกำลังใช้งานในโหมด <strong>Guest</strong> (รับชมได้จำกัด 10 เรื่อง และไม่สามารถเลือกหมวดหมู่ได้)
+                <button
+                  type="button"
                   className="inline-register-link"
                   onClick={() => { setAuthError(''); setAuthMode('register'); setShowAuthModal(true); }}
                 >
@@ -911,10 +1066,10 @@ function App() {
             <form className="search-form" onSubmit={handleSearchSubmit}>
               <div className="input-group">
                 <label htmlFor="searchInput" className="sr-only">ค้นหาภาพยนตร์</label>
-                <input 
+                <input
                   id="searchInput"
-                  type="text" 
-                  placeholder="พิมพ์ค้นหาชื่อภาพยนตร์ (เช่น Scream, Shutter, Scary)..." 
+                  type="text"
+                  placeholder="พิมพ์ค้นหาชื่อภาพยนตร์ (เช่น Scream, Shutter, Scary)..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value)
@@ -927,7 +1082,7 @@ function App() {
                 {/* Category Dropdown (Locked for Guest) */}
                 <label htmlFor="categorySelect" className="sr-only">เลือกหมวดหมู่</label>
                 <div className={`select-wrapper ${currentUser.role === 'Guest' ? 'locked' : ''}`}>
-                  <select 
+                  <select
                     id="categorySelect"
                     className="category-select"
                     value={category}
@@ -944,8 +1099,8 @@ function App() {
                   </select>
                 </div>
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="search-button"
                   disabled={loading}
                 >
@@ -1019,8 +1174,8 @@ function App() {
                     <h4>คุณกำลังรับชม 10 เรื่องในโหมด Guest</h4>
                     <p>ต้องการรับชมภาพยนตร์สยองขวัญระดับตำนานและเรื่องอื่นๆ ทั้งหมด 30+ เรื่อง พร้อมสิทธิ์การกด Favorite และให้คะแนนหรือไม่?</p>
                   </div>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn-upgrade-now"
                     onClick={() => { setAuthError(''); setAuthMode('register'); setShowAuthModal(true); }}
                   >
@@ -1046,8 +1201,8 @@ function App() {
               <span className="empty-icon">🎬</span>
               <h3>ยังไม่มีภาพยนตร์ใน Watchlist ของคุณ</h3>
               <p>กลับไปที่หน้าหลักแล้วกดปุ่มหัวใจ ❤️ ที่การ์ดภาพยนตร์เพื่อบันทึกไว้ดูภายหลัง</p>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-back-home"
                 onClick={() => setCurrentTab('home')}
               >
@@ -1079,9 +1234,9 @@ function App() {
               <p className="card-desc">เพิ่มหมวดหมู่ใหม่ให้กับระบบเพื่อใช้จัดกลุ่มภาพยนตร์</p>
 
               <form onSubmit={handleAddCategory} className="admin-form-row">
-                <input 
-                  type="text" 
-                  placeholder="เช่น ซอมบี้, ไซไฟ-สยองขวัญ, ฆาตกรรม..." 
+                <input
+                  type="text"
+                  placeholder="เช่น ซอมบี้, ไซไฟ-สยองขวัญ, ฆาตกรรม..."
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   className="admin-input"
@@ -1110,9 +1265,9 @@ function App() {
                 <div className="form-group-2col">
                   <div>
                     <label>ชื่อภาพยนตร์ *</label>
-                    <input 
-                      type="text" 
-                      placeholder="เช่น Smile 2, Terrifier 3" 
+                    <input
+                      type="text"
+                      placeholder="เช่น Smile 2, Terrifier 3"
                       value={newMovie.name}
                       onChange={(e) => setNewMovie({ ...newMovie, name: e.target.value })}
                       className="admin-input"
@@ -1121,8 +1276,8 @@ function App() {
                   </div>
                   <div>
                     <label>ปีที่ฉาย</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={newMovie.year}
                       onChange={(e) => setNewMovie({ ...newMovie, year: e.target.value })}
                       className="admin-input"
@@ -1133,7 +1288,7 @@ function App() {
                 <div className="form-group-2col">
                   <div>
                     <label>หมวดหมู่</label>
-                    <select 
+                    <select
                       value={newMovie.category}
                       onChange={(e) => setNewMovie({ ...newMovie, category: e.target.value })}
                       className="admin-input"
@@ -1145,10 +1300,10 @@ function App() {
                   </div>
                   <div>
                     <label>คะแนนเริ่มต้น (1 - 5 ดาว)</label>
-                    <input 
-                      type="number" 
-                      step="0.1" 
-                      min="1" 
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1"
                       max="5"
                       value={newMovie.rating}
                       onChange={(e) => setNewMovie({ ...newMovie, rating: e.target.value })}
@@ -1159,24 +1314,24 @@ function App() {
 
                 <div>
                   <label>URL รูปภาพโปสเตอร์</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://... (หรือเว้นว่างไว้เพื่อใช้รูปเริ่มต้น)" 
+                  <input
+                    type="url"
+                    placeholder="https://... (หรือเว้นว่างไว้เพื่อใช้รูปเริ่มต้น)"
                     value={newMovie.image}
                     onChange={(e) => setNewMovie({ ...newMovie, image: e.target.value })}
                     className="admin-input"
                   />
                   <div className="image-presets">
                     <span>หรือคลิกเลือกภาพตัวอย่าง: </span>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="preset-btn"
                       onClick={() => setNewMovie({ ...newMovie, image: 'https://upload.wikimedia.org/wikipedia/en/7/7f/Smile_2_film_poster.jpg' })}
                     >
                       Smile 2
                     </button>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="preset-btn"
                       onClick={() => setNewMovie({ ...newMovie, image: 'https://upload.wikimedia.org/wikipedia/en/b/b9/Terrifier_3_poster.jpg' })}
                     >
@@ -1187,9 +1342,9 @@ function App() {
 
                 <div>
                   <label>ลิงก์ข้อมูลเพิ่มเติม (Wikipedia / IMDb)</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://en.wikipedia.org/wiki/..." 
+                  <input
+                    type="url"
+                    placeholder="https://en.wikipedia.org/wiki/..."
                     value={newMovie.link}
                     onChange={(e) => setNewMovie({ ...newMovie, link: e.target.value })}
                     className="admin-input"
@@ -1198,9 +1353,9 @@ function App() {
 
                 <div>
                   <label>เรื่องย่อ (Synopsis)</label>
-                  <textarea 
+                  <textarea
                     rows="3"
-                    placeholder="อธิบายเนื้อเรื่องย่อของภาพยนตร์..." 
+                    placeholder="อธิบายเนื้อเรื่องย่อของภาพยนตร์..."
                     value={newMovie.summary}
                     onChange={(e) => setNewMovie({ ...newMovie, summary: e.target.value })}
                     className="admin-input"
@@ -1209,8 +1364,8 @@ function App() {
 
                 <div className="checkbox-wrap">
                   <label>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={newMovie.recommended}
                       onChange={(e) => setNewMovie({ ...newMovie, recommended: e.target.checked })}
                     />
@@ -1235,7 +1390,7 @@ function App() {
           <header className="page-header">
             <h2>👥 บัญชีผู้ใช้งานในระบบ</h2>
             <p className="subtitle">
-              แสดงข้อมูลบัญชีผู้ใช้งาน {activeSupabase ? '(เชื่อมต่อ Supabase Auth)' : '(เชื่อมต่อผ่าน public/users.json)'}
+              แสดงข้อมูลบัญชีผู้ใช้งาน (เชื่อมต่อผ่าน public/users.json และ Cloud Course API)
             </p>
           </header>
 
@@ -1268,8 +1423,8 @@ function App() {
                 </div>
 
                 <div className="user-card-actions">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn-login-as"
                     onClick={() => {
                       setCurrentUser(u)
@@ -1285,67 +1440,361 @@ function App() {
           </div>
 
           <div className="api-info-box">
-            <h4>💡 ข้อมูล Requirement เชื่อม Supabase Auth สำหรับนำเสนออาจารย์:</h4>
-            <p>1. <strong>สมัครสมาชิก (Sign Up):</strong> เชื่อมโยง <code>supabase.auth.signUp()</code> ส่ง Email, Password และ Metadata</p>
-            <p>2. <strong>เข้าสู่ระบบ (Login):</strong> ตรวจสอบสิทธิ์ผ่าน <code>supabase.auth.signInWithPassword()</code></p>
-            <p>3. <strong>แสดงข้อมูลสมาชิก (Member Area):</strong> แสดงชื่อ, Email และ Role บนแถบ Navigation</p>
-            <p>4. <strong>จัดการข้อผิดพลาด (Error Handling):</strong> แสดงข้อความเตือนเมื่อกรอกผิด หรือรหัสไม่ตรง</p>
-            <p>5. <strong>จัดการ Session (Session Persistence):</strong> ตรวจจับ Session ด้วย <code>supabase.auth.getSession()</code> รีเฟรชแล้วยังคง Login อยู่</p>
-            <p>6. <strong>ออกจากระบบ (Logout):</strong> เรียกใช้ <code>supabase.auth.signOut()</code> และรีเซ็ตกลับเป็น Guest ทันที</p>
+            <h4>💡 ข้อมูล Requirement เชื่อม Cloud Course API (dev2life Workers):</h4>
+            <p>1. <strong>ตรวจสอบสถานะระบบ (Health Check):</strong> เรียก <code>GET /api/v1/system/health</code> ตรวจเช็กสถานะแบบ Real-time</p>
+            <p>2. <strong>สมัครสมาชิก (Sign Up):</strong> ส่งข้อมูล <code>POST /api/v1/auth/register</code> บันทึกลง Cloud Database</p>
+            <p>3. <strong>เข้าสู่ระบบ (Login):</strong> ตรวจสอบสิทธิ์ผ่าน <code>POST /api/v1/auth/login</code> พร้อมเก็บ JWT Tokens</p>
+            <p>4. <strong>แสดงข้อมูลสมาชิก (Member Area):</strong> แสดงชื่อ, Email และ Role จาก <code>GET /api/v1/auth/me</code></p>
+            <p>5. <strong>Route Guard & Permissions:</strong> ทดสอบสิทธิ์การเข้าถึงผ่าน <code>/api/v1/demo/*</code> (Public, User, Editor, Admin)</p>
+            <p>6. <strong>ออกจากระบบ (Logout):</strong> เรียกใช้ <code>POST /api/v1/auth/logout</code> และเคลียร์ Session กลับสู่ Guest</p>
           </div>
         </div>
       )}
 
-      {/* ================= MODAL: SUPABASE SETTINGS ================= */}
-      {showSupabaseModal && (
-        <div className="modal-backdrop" onClick={() => setShowSupabaseModal(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>⚡ ตั้งค่าการเชื่อมต่อ Supabase Auth</h3>
-              <button type="button" className="close-modal" onClick={() => setShowSupabaseModal(false)}>✕</button>
-            </div>
-            <form onSubmit={handleSaveSupabaseConfig} className="modal-body auth-form">
-              <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '1rem', textAlign: 'left' }}>
-                ใส่ <strong>Project URL</strong> และ <strong>Anon Key</strong> จาก Supabase Dashboard เพื่อเชื่อมต่อระบบ Auth จริง 
-                (หรือเว้นว่างไว้หากต้องการใช้โหมด Local <code>users.json</code> จำลอง)
+      {/* ================= TAB 5: CLOUD API & HEALTH SYSTEM ================= */}
+      {currentTab === 'api' && (
+        <div className="api-section">
+          {/* Header Card */}
+          <div className="api-header-card">
+            <div className="api-header-info">
+              <span className="api-badge-glow">🌐 React Course Cloud API (dev2life Workers)</span>
+              <h2>ระบบเชื่อมต่อ Backend API</h2>
+              <p className="api-desc">
+                API Base URL: <code>{API_BASE_URL}</code>
               </p>
-              <div className="form-group">
-                <label>Supabase Project URL</label>
-                <input 
-                  type="url"
-                  placeholder="https://xyzcompany.supabase.co"
-                  value={sbConfig.url}
-                  onChange={(e) => setSbConfig({ ...sbConfig, url: e.target.value })}
-                  className="auth-input"
-                />
+            </div>
+            <div className="api-status-widget">
+              <div className={`status-pill ${apiStatus}`}>
+                <span className="status-indicator"></span>
+                <span>สถานะ: {apiStatus === 'online' ? 'Online พร้อมใช้งาน' : apiStatus === 'offline' ? 'Offline ไม่สามารถเชื่อมต่อได้' : 'กำลังตรวจสอบ...'}</span>
               </div>
-              <div className="form-group">
-                <label>Supabase Anon Key</label>
-                <input 
-                  type="password"
-                  placeholder="eyJh...... (Anon Public Key)"
-                  value={sbConfig.key}
-                  onChange={(e) => setSbConfig({ ...sbConfig, key: e.target.value })}
-                  className="auth-input"
-                />
-              </div>
-
-              <div className="form-row-between" style={{ marginTop: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', color: activeSupabase ? '#4ade80' : '#f59e0b' }}>
-                  สถานะปัจจุบัน: {activeSupabase ? '● เชื่อมต่อ Supabase แล้ว' : '○ ใช้งานโหมด Local (users.json)'}
-                </span>
-              </div>
-
-              <div className="modal-footer" style={{ padding: '1rem 0 0', background: 'transparent' }}>
-                <button type="button" className="btn-outline-modal" onClick={() => setShowSupabaseModal(false)}>
-                  ยกเลิก
-                </button>
-                <button type="submit" className="btn-solid-modal">
-                  บันทึกการเชื่อมต่อ
-                </button>
-              </div>
-            </form>
+              {apiLatency && <span className="latency-pill">⚡ Latency: {apiLatency} ms</span>}
+              <button type="button" className="btn-refresh-health" onClick={fetchApiHealth}>
+                🔄 เช็กสถานะใหม่
+              </button>
+            </div>
           </div>
+
+          {/* Section 1: Health Check (ตรงตามโจทย์ในภาพ) */}
+          <div className="api-card">
+            <div className="api-card-header">
+              <div className="card-title-group">
+                <h3>1. ทดสอบเรียก Health Check API</h3>
+                <span className="endpoint-tag">GET /api/v1/system/health</span>
+              </div>
+              <span className="api-helper-tag">
+                คำสั่ง: <code>fetch(`${import.meta.env.VITE_API_URL}/system/health`)</code>
+              </span>
+            </div>
+            <div className="api-card-body">
+              <pre className="code-output-box">
+                {apiHealth ? JSON.stringify(apiHealth, null, 2) : '// กำลังเรียก API หรือไม่พบข้อมูล...'}
+              </pre>
+            </div>
+          </div>
+
+          {/* Section 2: Route Guard / Permissions Demo */}
+          <div className="api-card">
+            <div className="api-card-header">
+              <div className="card-title-group">
+                <h3>2. ทดสอบ Route Guard & สิทธิ์การเข้าถึง (Demo Permissions)</h3>
+                <span className="endpoint-tag">GET /api/v1/demo/:level</span>
+              </div>
+              <span className="user-current-pill">
+                ผู้ใช้ปัจจุบัน: {currentUser.role} ({currentUser.name}) [{currentUser.authProvider === 'api' ? 'Cloud API' : currentUser.authProvider || 'Local'}]
+              </span>
+            </div>
+            <div className="api-card-body">
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1rem' }}>
+                ทดสอบยิง API ตามระดับสิทธิ์ (ระบบแนบ Bearer Token ให้อัตโนมัติใน Header):
+              </p>
+              <div className="demo-route-buttons">
+                <button
+                  type="button"
+                  className="btn-demo-route public"
+                  onClick={() => handleTestDemoRoute('public')}
+                  disabled={demoTestLoading}
+                >
+                  🔓 Public (ทุกคนเข้าได้)
+                </button>
+                <button
+                  type="button"
+                  className="btn-demo-route user"
+                  onClick={() => handleTestDemoRoute('user')}
+                  disabled={demoTestLoading}
+                >
+                  👤 User (ต้องเข้าสู่ระบบ)
+                </button>
+                <button
+                  type="button"
+                  className="btn-demo-route editor"
+                  onClick={() => handleTestDemoRoute('editor')}
+                  disabled={demoTestLoading}
+                >
+                  ✍️ Editor (EDITOR หรือ ADMIN)
+                </button>
+                <button
+                  type="button"
+                  className="btn-demo-route admin"
+                  onClick={() => handleTestDemoRoute('admin')}
+                  disabled={demoTestLoading}
+                >
+                  👑 Admin (ADMIN เท่านั้น)
+                </button>
+              </div>
+
+              {demoTestResult && (
+                <div className={`demo-result-box ${demoTestResult.success ? 'success' : 'failed'}`}>
+                  <div className="demo-result-header">
+                    <span>
+                      ผลลัพธ์ /{demoTestResult.level}: {demoTestResult.success ? '✅ ผ่านสิทธิ์ (Authorized)' : '❌ สิทธิ์ไม่เพียงพอหรือยังไม่เข้าสู่ระบบ'}
+                    </span>
+                  </div>
+                  <pre className="code-output-box small">
+                    {JSON.stringify(demoTestResult.success ? demoTestResult.data : { error: demoTestResult.error }, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 3: Dev Teaching Helper - ทดสอบ Auto-Refresh เมื่อ Token หมดอายุ (Lv3) */}
+          <div className="api-card">
+            <div className="api-card-header">
+              <div className="card-title-group">
+                <h3>3. ทดสอบ Auto-Refresh เมื่อ Token หมดอายุ (Axios Interceptor)</h3>
+                <span className="endpoint-tag">POST /api/v1/auth/dev/expired-token</span>
+              </div>
+              <button
+                type="button"
+                className="btn-test-expired"
+                onClick={handleTestExpiredToken}
+                disabled={testingExpiredToken || !tokenStore.access}
+                title={!tokenStore.access ? 'ต้องเข้าสู่ระบบผ่าน Cloud API ก่อนจึงจะทดสอบได้' : 'คลิกเพื่อทดสอบจำลอง Token หมดอายุและ Auto-Refresh'}
+              >
+                {testingExpiredToken ? '⏳ กำลังทดสอบ...' : '⏰ จำลอง Token หมดอายุ & ทดสอบ Auto-Refresh'}
+              </button>
+            </div>
+            <div className="api-card-body">
+              <p style={{ color: '#94a3b8', fontSize: '0.88rem', lineHeight: '1.6' }}>
+                💡 <strong>กลไกการทำงานตามมาตรฐานหลักสูตร:</strong> เมื่อกดปุ่ม ระบบจะขอ <code>accessToken</code> ที่หมดอายุแล้ว 1 นาที จากนั้นส่งคำขอไปยัง <code>GET /auth/me</code>
+                Axios Interceptor จะดักจับ HTTP <code>401 TOKEN_EXPIRED</code> อัตโนมัติ แล้วนำ <code>refreshToken</code> ไปขอคู่ Token ใหม่ที่ <code>/auth/refresh</code> และ Retry Request เดิมทันทีโดยที่ผู้ใช้ไม่ต้อง Login ใหม่
+              </p>
+              {!tokenStore.access && (
+                <p style={{ color: '#fbbf24', fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                  ⚠️ กรุณาเข้าสู่ระบบผ่าน Cloud API (เช่น บัญชี <code>admin@demo.com</code> หรือ <code>user@demo.com</code>) ก่อนกดทดสอบ
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Section 4: Cloud API Users (ถ้า Role ปัจจุบันเป็น Admin) */}
+          {(currentUser.role === 'Admin' || currentUser.apiRole === 'ADMIN') && (
+            <div className="api-card">
+              <div className="api-card-header">
+                <div className="card-title-group">
+                  <h3>4. บัญชีผู้ใช้บน Cloud API (Admin Only)</h3>
+                  <span className="endpoint-tag">GET /api/v1/admin/users</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-fetch-cloud-users"
+                  onClick={() => fetchCloudUsers(1)}
+                  disabled={loadingCloudUsers}
+                >
+                  {loadingCloudUsers ? '⏳ กำลังโหลด...' : '📥 โหลดข้อมูลใหม่'}
+                </button>
+              </div>
+
+              <div className="api-card-body">
+                {/* User Stats Summary Cards */}
+                {adminStats && (
+                  <div className="admin-stats-grid">
+                    <div className="admin-stat-card">
+                      <div className="stat-title">ผู้ใช้ทั้งหมด</div>
+                      <div className="stat-value">{adminStats.total}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="stat-title">USER</div>
+                      <div className="stat-value" style={{ color: '#a78bfa' }}>{adminStats.byRole?.USER ?? 0}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="stat-title">EDITOR</div>
+                      <div className="stat-value" style={{ color: '#38bdf8' }}>{adminStats.byRole?.EDITOR ?? 0}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="stat-title">ADMIN</div>
+                      <div className="stat-value" style={{ color: '#fbbf24' }}>{adminStats.byRole?.ADMIN ?? 0}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="stat-title">ACTIVE</div>
+                      <div className="stat-value" style={{ color: '#4ade80' }}>{adminStats.byStatus?.ACTIVE ?? 0}</div>
+                    </div>
+                    <div className="admin-stat-card">
+                      <div className="stat-title">BANNED</div>
+                      <div className="stat-value" style={{ color: '#f87171' }}>{adminStats.byStatus?.BANNED ?? 0}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filter and Search Bar */}
+                <div className="admin-filter-bar">
+                  <input
+                    type="text"
+                    placeholder="🔍 ค้นหาชื่อ หรือ อีเมล..."
+                    value={adminSearch}
+                    onChange={(e) => setAdminSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') fetchCloudUsers(1); }}
+                    className="admin-search-input"
+                  />
+                  <select
+                    className="admin-select"
+                    value={adminRoleFilter}
+                    onChange={(e) => { setAdminRoleFilter(e.target.value); }}
+                  >
+                    <option value="">ทุก Role</option>
+                    <option value="USER">USER</option>
+                    <option value="EDITOR">EDITOR</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </select>
+                  <select
+                    className="admin-select"
+                    value={adminStatusFilter}
+                    onChange={(e) => { setAdminStatusFilter(e.target.value); }}
+                  >
+                    <option value="">ทุกสถานะ</option>
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="BANNED">BANNED</option>
+                  </select>
+                  <select
+                    className="admin-select"
+                    value={adminSort}
+                    onChange={(e) => { setAdminSort(e.target.value); }}
+                  >
+                    <option value="createdAt">เรียงตาม วันที่สมัคร</option>
+                    <option value="name">เรียงตาม ชื่อ</option>
+                    <option value="email">เรียงตาม อีเมล</option>
+                  </select>
+                  <select
+                    className="admin-select"
+                    value={adminOrder}
+                    onChange={(e) => { setAdminOrder(e.target.value); }}
+                  >
+                    <option value="desc">มาก ➔ น้อย</option>
+                    <option value="asc">น้อย ➔ มาก</option>
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-fetch-cloud-users"
+                    onClick={() => fetchCloudUsers(1)}
+                  >
+                    🔎 กรอง
+                  </button>
+                </div>
+
+                {cloudUsers.length > 0 ? (
+                  <>
+                    <div className="cloud-users-table-wrap">
+                      <table className="users-table">
+                        <thead>
+                          <tr>
+                            <th>ชื่อ</th>
+                            <th>อีเมล</th>
+                            <th>Role</th>
+                            <th>สถานะ</th>
+                            <th>การจัดการ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cloudUsers.map(u => {
+                            const isSelf = u.id === currentUser.id
+                            const isProtectedAccount = u.isProtected || u.role === 'ADMIN' || isSelf
+                            return (
+                              <tr key={u.id}>
+                                <td>
+                                  <strong>{u.name}</strong>
+                                  {u.isProtected && <span className="tag-protected" title="บัญชีตัวอย่าง ไม่สามารถแก้ไขได้">🔒 Protected</span>}
+                                  {isSelf && <span className="tag-protected" style={{ background: 'rgba(56,189,248,0.2)', color: '#38bdf8', borderColor: '#38bdf8' }}>คุณ</span>}
+                                </td>
+                                <td><code>{u.email}</code></td>
+                                <td>
+                                  {isProtectedAccount ? (
+                                    <span className={`role-badge role-${u.role.toLowerCase()}`}>{u.role}</span>
+                                  ) : (
+                                    <select
+                                      className="admin-select"
+                                      value={u.role}
+                                      onChange={(e) => handleUpdateRole(u.id, e.target.value)}
+                                      style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem' }}
+                                    >
+                                      <option value="USER">USER</option>
+                                      <option value="EDITOR">EDITOR</option>
+                                    </select>
+                                  )}
+                                </td>
+                                <td>
+                                  <span className={`status-badge ${u.status.toLowerCase()}`}>{u.status}</span>
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                    <button
+                                      type="button"
+                                      className={`admin-action-btn ${u.status === 'ACTIVE' ? 'ban' : 'unban'}`}
+                                      disabled={isProtectedAccount}
+                                      onClick={() => handleUpdateStatus(u.id, u.status === 'ACTIVE' ? 'BANNED' : 'ACTIVE')}
+                                      title={isProtectedAccount ? 'ไม่สามารถแก้ไขบัญชี Protected/Admin/ตัวเอง' : ''}
+                                    >
+                                      {u.status === 'ACTIVE' ? '⛔ แบน' : '✅ ปลดแบน'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="admin-action-btn ban"
+                                      disabled={isProtectedAccount}
+                                      onClick={() => handleDeleteCloudUser(u.id, u.name)}
+                                      title={isProtectedAccount ? 'ไม่สามารถลบบัญชี Protected/Admin/ตัวเอง' : 'ลบบัญชี'}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Pagination */}
+                    <div className="admin-pagination">
+                      <span>หน้า {adminMeta.page} จากทั้งหมด {adminMeta.totalPages} หน้า (รวม {adminMeta.total} บัญชี)</span>
+                      <div className="pagination-buttons">
+                        <button
+                          type="button"
+                          className="pagination-btn"
+                          disabled={adminPage <= 1 || loadingCloudUsers}
+                          onClick={() => fetchCloudUsers(adminPage - 1)}
+                        >
+                          ◀ ก่อนหน้า
+                        </button>
+                        <button
+                          type="button"
+                          className="pagination-btn"
+                          disabled={adminPage >= adminMeta.totalPages || loadingCloudUsers}
+                          onClick={() => fetchCloudUsers(adminPage + 1)}
+                        >
+                          ถัดไป ▶
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ color: '#94a3b8', textAlign: 'center', padding: '1.5rem', fontSize: '0.9rem' }}>
+                    กดปุ่ม <strong>"โหลดข้อมูลใหม่"</strong> เพื่อดึงรายชื่อผู้ใช้จาก Cloud API
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1355,8 +1804,8 @@ function App() {
           <div className="modal-box modal-warning" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{guestWarningModal.title}</h3>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="close-modal"
                 onClick={() => setGuestWarningModal({ show: false, title: '', message: '' })}
               >
@@ -1368,8 +1817,8 @@ function App() {
               <p>{guestWarningModal.message}</p>
             </div>
             <div className="modal-footer">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-outline-modal"
                 onClick={() => {
                   setGuestWarningModal({ show: false, title: '', message: '' })
@@ -1380,8 +1829,8 @@ function App() {
               >
                 เข้าสู่ระบบ
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 className="btn-solid-modal"
                 onClick={() => {
                   setGuestWarningModal({ show: false, title: '', message: '' })
@@ -1403,15 +1852,15 @@ function App() {
           <div className="modal-box auth-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="auth-tab-switch">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className={`auth-tab-item ${authMode === 'login' ? 'active' : ''}`}
                   onClick={() => { setAuthError(''); setAuthMode('login'); }}
                 >
                   เข้าสู่ระบบ (Login)
                 </button>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className={`auth-tab-item ${authMode === 'register' ? 'active' : ''}`}
                   onClick={() => { setAuthError(''); setAuthMode('register'); }}
                 >
@@ -1422,6 +1871,24 @@ function App() {
             </div>
 
             <div className="modal-body">
+              {/* Provider Selection */}
+              <div className="auth-provider-selector">
+                <button
+                  type="button"
+                  className={`provider-btn ${authProvider === 'api' ? 'active' : ''}`}
+                  onClick={() => { setAuthProvider('api'); setAuthError(''); }}
+                >
+                  ☁️ Cloud API (dev2life)
+                </button>
+                <button
+                  type="button"
+                  className={`provider-btn ${authProvider === 'local' ? 'active' : ''}`}
+                  onClick={() => { setAuthProvider('local'); setAuthError(''); }}
+                >
+                  📄 Local Mock (users.json)
+                </button>
+              </div>
+
               {/* 4. แสดง Error เมื่อสมัครหรือ Login ไม่สำเร็จ (Error Handling) */}
               {authError && (
                 <div className="auth-error-banner">
@@ -1434,32 +1901,40 @@ function App() {
                 <form onSubmit={handleLoginSubmit} className="auth-form">
                   <div className="form-group">
                     <label>อีเมล หรือ ชื่อผู้ใช้</label>
-                    <input 
-                      type="text" 
-                      placeholder={activeSupabase ? 'example@email.com (สำหรับ Supabase)' : 'member_alex หรือ admin_vlad'}
+                    <input
+                      type="text"
+                      placeholder={authProvider === 'api' ? 'user@demo.com หรือ admin@demo.com' : 'member_alex หรือ admin_vlad'}
                       value={loginForm.emailOrUser}
-                      onChange={(e) => setLoginForm({ ...loginForm, emailOrUser: e.target.value })}
-                      className="auth-input"
+                      onChange={(e) => {
+                        setLoginForm({ ...loginForm, emailOrUser: e.target.value })
+                        setFieldErrorsObj({ ...fieldErrorsObj, email: '' })
+                      }}
+                      className={`auth-input ${fieldErrorsObj.email ? 'has-error' : ''}`}
                       required
                     />
+                    {fieldErrorsObj.email && <span className="field-error-text">❌ {fieldErrorsObj.email}</span>}
                   </div>
 
                   <div className="form-group">
                     <label>รหัสผ่าน</label>
-                    <input 
-                      type="password" 
-                      placeholder="••••••••" 
+                    <input
+                      type="password"
+                      placeholder="••••••••"
                       value={loginForm.password}
-                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                      className="auth-input"
+                      onChange={(e) => {
+                        setLoginForm({ ...loginForm, password: e.target.value })
+                        setFieldErrorsObj({ ...fieldErrorsObj, password: '' })
+                      }}
+                      className={`auth-input ${fieldErrorsObj.password ? 'has-error' : ''}`}
                       required
                     />
+                    {fieldErrorsObj.password && <span className="field-error-text">❌ {fieldErrorsObj.password}</span>}
                   </div>
 
                   <div className="form-row-between">
                     <label className="checkbox-label">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={loginForm.rememberMe}
                         onChange={(e) => setLoginForm({ ...loginForm, rememberMe: e.target.checked })}
                       />
@@ -1470,34 +1945,92 @@ function App() {
                     </a>
                   </div>
 
-                  <button type="submit" className="btn-auth-submit">
-                    เข้าสู่ระบบ {activeSupabase ? '(ผ่าน Supabase Auth)' : ''} 🩸
+                  <button type="submit" className="btn-auth-submit" disabled={submittingAuth}>
+                    {submittingAuth ? 'กำลังเข้าสู่ระบบ...' : `เข้าสู่ระบบ ${authProvider === 'api' ? '(Cloud Course API)' : '(Local users.json)'} 🩸`}
                   </button>
 
                   <div className="demo-accounts-hint">
-                    <span>💡 บัญชีทดสอบที่มีใน users.json:</span>
-                    <div className="demo-pill-wrap">
-                      <button 
-                        type="button" 
-                        className="demo-pill"
-                        onClick={() => {
-                          setAuthError('')
-                          setLoginForm({ emailOrUser: 'alex@scaryseries.com', password: 'password123', rememberMe: true })
-                        }}
-                      >
-                        Member: <code>alex@scaryseries.com</code> / <code>password123</code>
-                      </button>
-                      <button 
-                        type="button" 
-                        className="demo-pill admin"
-                        onClick={() => {
-                          setAuthError('')
-                          setLoginForm({ emailOrUser: 'admin@scaryseries.com', password: 'admin123', rememberMe: true })
-                        }}
-                      >
-                        Admin: <code>admin@scaryseries.com</code> / <code>admin123</code>
-                      </button>
-                    </div>
+                    {authProvider === 'api' ? (
+                      <>
+                        <span>💡 บัญชีทดสอบ Cloud Course API (dev2life Workers):</span>
+                        <div className="demo-pill-wrap">
+                          <button
+                            type="button"
+                            className="demo-pill cloud-pill"
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'user@demo.com', password: 'Password123', rememberMe: true })
+                            }}
+                          >
+                            Member: <code>user@demo.com</code>
+                          </button>
+                          <button
+                            type="button"
+                            className="demo-pill cloud-pill"
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'editor@demo.com', password: 'Password123', rememberMe: true })
+                            }}
+                          >
+                            Editor: <code>editor@demo.com</code>
+                          </button>
+                          <button
+                            type="button"
+                            className="demo-pill cloud-pill admin"
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'admin@demo.com', password: 'Password123', rememberMe: true })
+                            }}
+                          >
+                            Admin: <code>admin@demo.com</code>
+                          </button>
+                          <button
+                            type="button"
+                            className="demo-pill cloud-pill"
+                            style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#f87171', background: 'rgba(239, 68, 68, 0.1)' }}
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'banned@demo.com', password: 'Password123', rememberMe: false })
+                            }}
+                            title="ทดสอบกรณีบัญชีถูกระงับ 403 ACCOUNT_BANNED"
+                          >
+                            ⛔ Banned: <code>banned@demo.com</code> (ทดสอบ)
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span>💡 บัญชีทดสอบที่มีใน users.json:</span>
+                        <div className="demo-pill-wrap">
+                          <button
+                            type="button"
+                            className="demo-pill"
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'alex@scaryseries.com', password: 'password123', rememberMe: true })
+                            }}
+                          >
+                            Member: <code>alex@scaryseries.com</code> / <code>password123</code>
+                          </button>
+                          <button
+                            type="button"
+                            className="demo-pill admin"
+                            onClick={() => {
+                              setAuthError('')
+                              setFieldErrorsObj({})
+                              setLoginForm({ emailOrUser: 'admin@scaryseries.com', password: 'admin123', rememberMe: true })
+                            }}
+                          >
+                            Admin: <code>admin@scaryseries.com</code> / <code>admin123</code>
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </form>
               )}
@@ -1508,62 +2041,82 @@ function App() {
                   <div className="form-group-2col">
                     <div className="form-group">
                       <label>ชื่อ-นามสกุล หรือ นามแฝง *</label>
-                      <input 
-                        type="text" 
-                        placeholder="เช่น สมชาย สายหลอน" 
+                      <input
+                        type="text"
+                        placeholder="เช่น สมชาย สายหลอน"
                         value={regForm.name}
-                        onChange={(e) => setRegForm({ ...regForm, name: e.target.value })}
-                        className="auth-input"
+                        onChange={(e) => {
+                          setRegForm({ ...regForm, name: e.target.value })
+                          setFieldErrorsObj({ ...fieldErrorsObj, name: '' })
+                        }}
+                        className={`auth-input ${fieldErrorsObj.name ? 'has-error' : ''}`}
                         required
                       />
+                      {fieldErrorsObj.name && <span className="field-error-text">❌ {fieldErrorsObj.name}</span>}
                     </div>
                     <div className="form-group">
                       <label>ชื่อผู้ใช้ (Username) *</label>
-                      <input 
-                        type="text" 
-                        placeholder="somchai_ghost" 
+                      <input
+                        type="text"
+                        placeholder="somchai_ghost"
                         value={regForm.username}
-                        onChange={(e) => setRegForm({ ...regForm, username: e.target.value })}
-                        className="auth-input"
+                        onChange={(e) => {
+                          setRegForm({ ...regForm, username: e.target.value })
+                          setFieldErrorsObj({ ...fieldErrorsObj, username: '' })
+                        }}
+                        className={`auth-input ${fieldErrorsObj.username ? 'has-error' : ''}`}
                         required
                       />
+                      {fieldErrorsObj.username && <span className="field-error-text">❌ {fieldErrorsObj.username}</span>}
                     </div>
                   </div>
 
                   <div className="form-group">
                     <label>อีเมล (Email) *</label>
-                    <input 
-                      type="email" 
-                      placeholder="somchai@gmail.com" 
+                    <input
+                      type="email"
+                      placeholder="somchai@gmail.com"
                       value={regForm.email}
-                      onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                      className="auth-input"
+                      onChange={(e) => {
+                        setRegForm({ ...regForm, email: e.target.value })
+                        setFieldErrorsObj({ ...fieldErrorsObj, email: '' })
+                      }}
+                      className={`auth-input ${fieldErrorsObj.email ? 'has-error' : ''}`}
                       required
                     />
+                    {fieldErrorsObj.email && <span className="field-error-text">❌ {fieldErrorsObj.email}</span>}
                   </div>
 
                   <div className="form-group-2col">
                     <div className="form-group">
-                      <label>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร) *</label>
-                      <input 
-                        type="password" 
-                        placeholder="••••••••" 
+                      <label>รหัสผ่าน (8–72 ตัวอักษร มีทั้งอังกฤษและตัวเลข) *</label>
+                      <input
+                        type="password"
+                        placeholder="••••••••"
                         value={regForm.password}
-                        onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
-                        className="auth-input"
+                        onChange={(e) => {
+                          setRegForm({ ...regForm, password: e.target.value })
+                          setFieldErrorsObj({ ...fieldErrorsObj, password: '' })
+                        }}
+                        className={`auth-input ${fieldErrorsObj.password ? 'has-error' : ''}`}
                         required
                       />
+                      {fieldErrorsObj.password && <span className="field-error-text">❌ {fieldErrorsObj.password}</span>}
                     </div>
                     <div className="form-group">
                       <label>ยืนยันรหัสผ่าน *</label>
-                      <input 
-                        type="password" 
-                        placeholder="••••••••" 
+                      <input
+                        type="password"
+                        placeholder="••••••••"
                         value={regForm.confirmPassword}
-                        onChange={(e) => setRegForm({ ...regForm, confirmPassword: e.target.value })}
-                        className="auth-input"
+                        onChange={(e) => {
+                          setRegForm({ ...regForm, confirmPassword: e.target.value })
+                          setFieldErrorsObj({ ...fieldErrorsObj, confirmPassword: '' })
+                        }}
+                        className={`auth-input ${fieldErrorsObj.confirmPassword ? 'has-error' : ''}`}
                         required
                       />
+                      {fieldErrorsObj.confirmPassword && <span className="field-error-text">❌ {fieldErrorsObj.confirmPassword}</span>}
                     </div>
                   </div>
 
@@ -1573,7 +2126,7 @@ function App() {
                     <div className="genre-checkbox-grid">
                       {['🪓 ฆาตกรต่อเนื่อง (Slasher)', '👻 วิญญาณ / ไล่ผี', '🧠 ระทึกขวัญจิตวิทยา', '🧟 ซอมบี้ / สัตว์ประหลาด', '🤡 ตลกร้ายล้อเลียน'].map(g => (
                         <label key={g} className="genre-checkbox-item">
-                          <input 
+                          <input
                             type="checkbox"
                             checked={regForm.genres.includes(g)}
                             onChange={(e) => {
@@ -1592,8 +2145,8 @@ function App() {
 
                   <div className="form-group">
                     <label className="checkbox-label">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={regForm.acceptTerms}
                         onChange={(e) => setRegForm({ ...regForm, acceptTerms: e.target.checked })}
                         required
@@ -1602,8 +2155,8 @@ function App() {
                     </label>
                   </div>
 
-                  <button type="submit" className="btn-auth-submit">
-                    ยืนยันการสมัครสมาชิก {activeSupabase ? '(เชื่อม Supabase Auth)' : ''} 🩸
+                  <button type="submit" className="btn-auth-submit" disabled={submittingAuth}>
+                    {submittingAuth ? 'กำลังส่งข้อมูลสมัครสมาชิก...' : `ยืนยันการสมัครสมาชิก ${authProvider === 'api' ? '(Cloud Course API)' : '(Local users.json)'} 🩸`}
                   </button>
                 </form>
               )}
